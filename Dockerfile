@@ -13,6 +13,7 @@ ARG INSTALL_PACKAGES="go git bash npm"
 ARG PROJECT_DIR="${GOPATH}/src/${GOPHISH_REPOSITORY}"
 ARG GOPHISH_BIN
 ARG RECIPIENT_PARAMETER
+ARG TRACK_PARAMETER
 
 RUN apk add --no-cache ${INSTALL_PACKAGES}
 
@@ -27,6 +28,10 @@ RUN set -ex \
 
 # Remove IOCs and customize GOPHISH
 WORKDIR ${PROJECT_DIR}
+COPY custom/campaign_results.js static/js/src/app/campaign_results.js
+# Original from (https://github.com/edermi/gophish_mods/blob/master/controllers/phish.go)
+COPY custom/phish.go controllers/phish.go
+COPY custom/404.html templates/404.html
 RUN set -ex \
     && sed -i 's/SignatureHeader = "X-Gophish-Signature"/SignatureHeader = "X-Report-Signature"/g' webhook/webhook.go \
     && sed -i 's/"github.com\/gophish\/gophish\/config"/\/\/"github.com\/gophish\/gophish\/config"/g' models/maillog.go \
@@ -37,22 +42,24 @@ RUN set -ex \
     && sed -i 's/msg.SetHeader("X-Gophish-Contact", conf.ContactAddress)/\/\/msg.SetHeader("X-Gophish-Contact", conf.ContactAddress)/g' models/email_request.go \
     && sed -i 's/"X-Gophish-Contact": s.config.ContactAddress,/\/\/"X-Gophish-Contact": s.config.ContactAddress,/g' models/email_request_test.go \
     && sed -i 's/const ServerName = "gophish"/const ServerName = "IGNORE"/g' config/config.go \
-    && sed -i 's/const RecipientParameter = "rid"/const RecipientParameter = "'"${RECIPIENT_PARAMETER}"'"/g' models/campaign.go
-COPY custom/404.html templates/404.html
-# Original from (https://github.com/edermi/gophish_mods/blob/master/controllers/phish.go)
-COPY custom/phish.go controllers/phish.go
+    && sed -i 's/const RecipientParameter = "rid"/const RecipientParameter = "'"${RECIPIENT_PARAMETER}"'"/g' models/campaign.go \
+    && sed -i 's/\/track/\/'"${TRACK_PARAMETER}"'/g' models/template_context.go \
+    && sed -i 's/\/track/\/'"${TRACK_PARAMETER}"'/g' controllers/phish.go \
+    && sed -i 's/ 7/ 40/g' models/result.go \
+    && sed -i 's/rid=/'"${RECIPIENT_PARAMETER}"'=/g' static/js/src/app/campaign_results.js \
+    && sed -i 's/rid=/'"${RECIPIENT_PARAMETER}"'=/g' static/js/dist/app/campaign_results.min.js
 
 # Build GOPHISH
 RUN set -x \
-	&& go get -v && go build -v \
+    && go get -v && go build -v \
     && cp -v gophish ${GOPHISH_BIN} \
     && mkdir -v /app \
     && cp -vr db /app \
     && cp -vr static /app \
     && cp -vr templates /app \
-	&& cp -v config.json /app \
+    && cp -v config.json /app \
     && cp -v VERSION /app \
-	&& cp -v LICENSE /app \
+    && cp -v LICENSE /app \
 # Minify client side assets (JavaScript)
     && npm install gulp gulp-cli -g \
     && npm install --only=dev && gulp \

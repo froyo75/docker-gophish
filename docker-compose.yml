@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
       args:
         - RECIPIENT_PARAMETER=${RECIPIENT_PARAMETER}
+        - TRACK_PARAMETER=${TRACK_PARAMETER}
     container_name: gophish
     env_file: gophish.env
     ports:
